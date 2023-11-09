@@ -1,0 +1,27 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Tests", "Tests\Tests.csproj", "{F1B91ED0-77BA-407B-8FBC-62DD3DB360CE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs", "Docs", "{679F9005-FC8E-4130-A236-56608CB4EA99}"
+	ProjectSection(SolutionItems) = preProject
+		..\README.md = ..\README.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{0712E505-4A4A-40FD-8C42-89219E582413}"
+	ProjectSection(SolutionItems) = preProject
+		..\Directory.Build.props = ..\Directory.Build.props
+		..\.github\workflows\build.dotnet.yml = ..\.github\workflows\build.dotnet.yml
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{F1B91ED0-77BA-407B-8FBC-62DD3DB360CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F1B91ED0-77BA-407B-8FBC-62DD3DB360CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F1B91ED0-77BA-407B-8FBC-62DD3DB360CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F1B91ED0-77BA-407B-8FBC-62DD3DB360CE}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
