@@ -85,38 +85,42 @@ public class ShoppingClassDecider(
     TimeProvider timeProvider)
 {
     public ShoppingCartEvent[] Decide(ShoppingCartCommand command, ShoppingCart state) =>
-        (command, state) switch
+        (state, command) switch
         {
-            (AddProduct (var cartId, var productItem, var clientId), Empty) =>
+            (Empty, AddProduct (var cartId, var productItem, var clientId)) =>
             [
                 new Opened(cartId, clientId, Now),
                 new ProductAdded(cartId, priceCalculator.Calculate(productItem).Single(), Now)
             ],
 
-            (AddProduct (var cartId, var productItem, _), Pending) =>
+            (Pending, AddProduct (var cartId, var productItem, _)) =>
             [
                 new ProductAdded(cartId, priceCalculator.Calculate(productItem).Single(), Now)
             ],
 
-            (RemoveProduct(var cartId, var pricedProductItem), Pending pending) =>
-            [
-                new ProductRemoved(cartId, pricedProductItem, Now)
-            ],
+            (Pending pending, RemoveProduct(var cartId, var pricedProductItem)) =>
+                pending.ProductItems
+                    .TryGetValue($"{pricedProductItem.ProductId}{pricedProductItem.Price}", out var quantity)
+                && quantity >= pricedProductItem.Quantity
+                    ?
+                    [
+                        new ProductRemoved(cartId, pricedProductItem, Now)
+                    ]
+                    : throw new InvalidOperationException("Not enough Products!"),
 
-            (Confirm(var cartId, var clientId), Pending pending) =>
+            (Pending, Confirm(var cartId, var clientId)) =>
             [
                 new Confirmed(cartId, clientId, Now)
             ],
 
-            (Confirm, Closed) => [],
-
-
-            (Cancel(var cartId), Pending pending) =>
+            (Pending, Cancel(var cartId)) =>
             [
                 new Cancelled(cartId, Now)
             ],
 
-            (Cancel, Closed) => [],
+            (Closed, Confirm) => [],
+
+            (Closed, Cancel) => [],
 
             (_, _) => throw new InvalidOperationException(nameof(command))
         };
@@ -152,6 +156,7 @@ public class ShoppingCartModel
 public interface IShoppingCartRepository
 {
     ValueTask<ShoppingCartModel?> Find(Guid id, CancellationToken ct);
+
     Task Store(Guid id, ShoppingCartModel? current, ShoppingCartEvent[] events, CancellationToken ct);
 
     async Task GetAndStore(Guid id, Func<ShoppingCartModel?, ShoppingCartEvent[]> handle, CancellationToken ct)
@@ -185,7 +190,7 @@ public class ShoppingClassCommandHandler(
         {
             case ShoppingCartModel.ShoppingCartStatus.Pending:
                 return new Pending(
-                    model.ProductItems.ToImmutableDictionary(ks => $"{ks.ProductId}__{ks.Price}", vs => vs.Quantity)
+                    model.ProductItems.ToImmutableDictionary(ks => $"{ks.ProductId}{ks.Price}", vs => vs.Quantity)
                 );
 
             case ShoppingCartModel.ShoppingCartStatus.Confirmed:
@@ -228,9 +233,9 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
     {
         foreach (var @event in events)
         {
-            switch (@event)
+            switch ((current, @event))
             {
-                case Opened(_, var clientId, var openedAt):
+                case (null, Opened(_, var clientId, var openedAt)):
                     dbContext.Add(new ShoppingCartModel
                     {
                         Id = id,
@@ -239,23 +244,23 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
                         OpenedAt = openedAt
                     });
                     break;
-                case Confirmed (_, var clientId, var confirmedAt):
-                    current!.Status = ShoppingCartModel.ShoppingCartStatus.Confirmed;
+                case (not null, Confirmed (_, var clientId, var confirmedAt)):
+                    current.Status = ShoppingCartModel.ShoppingCartStatus.Confirmed;
                     current.ClientId = clientId;
                     current.ConfirmedAt = confirmedAt;
                     dbContext.ShoppingCarts.Update(current);
                     break;
-                case Cancelled (_, var canceledAt):
-                    current!.Status = ShoppingCartModel.ShoppingCartStatus.Canceled;
+                case (not null, Cancelled (_, var canceledAt)):
+                    current.Status = ShoppingCartModel.ShoppingCartStatus.Canceled;
                     current.ConfirmedAt = canceledAt;
                     dbContext.ShoppingCarts.Update(current);
                     break;
-                case ProductAdded(_, var productItem, _):
-                    current!.ProductItems
+                case (not null, ProductAdded(_, var productItem, _)):
+                    current.ProductItems
                         .Single(p => p.ProductId == productItem.ProductId)
                         .Quantity += productItem.Quantity;
                     break;
-                case ProductRemoved(_, var productItem, _):
+                case (not null, ProductRemoved(_, var productItem, _)):
                     var existing = current!.ProductItems.Single(p => p.ProductId == productItem.ProductId);
 
                     if (existing.Quantity - productItem.Quantity == 0)
@@ -284,7 +289,7 @@ public class DummyProductPriceCalculator(decimal price): IProductPriceCalculator
         productItems.Select(pi => new PricedProductItem(pi.ProductId, pi.Quantity, price)).ToArray();
 }
 
-public class UnitTest1
+public class Test
 {
     [Fact]
     public void GivenEmptyShoppingCart_WhenAddProduct_ThenReturnsOpenedAndProductAddedEvents()
@@ -308,6 +313,5 @@ public class UnitTest1
             new Opened(cardId, null, now),
             new ProductAdded(cardId, new PricedProductItem(productItem.ProductId, productItem.Quantity, price), now)
         ]);
-
     }
 }

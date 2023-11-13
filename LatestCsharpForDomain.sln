@@ -9,8 +9,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Docs", "Docs", "{679F9005-F
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Build", "Build", "{0712E505-4A4A-40FD-8C42-89219E582413}"
 	ProjectSection(SolutionItems) = preProject
-		..\Directory.Build.props = ..\Directory.Build.props
-		..\.github\workflows\build.dotnet.yml = ..\.github\workflows\build.dotnet.yml
+		Directory.Build.props = Directory.Build.props
+		.github\workflows\build.dotnet.yml = .github\workflows\build.dotnet.yml
 	EndProjectSection
 EndProject
 Global
