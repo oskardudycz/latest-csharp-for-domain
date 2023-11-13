@@ -25,150 +25,52 @@ public interface IProductPriceCalculator
 public record OpenShoppingCart(
     Guid CartId,
     Guid ClientId
-)
-{
-    public static OpenShoppingCart Create(Guid? cartId, Guid? clientId)
-    {
-        if (cartId == null || cartId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(cartId));
-        if (clientId == null || clientId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(clientId));
-
-        return new OpenShoppingCart(cartId.Value, clientId.Value);
-    }
-}
+);
 
 public record AddProduct(
     Guid CartId,
     ProductItem ProductItem
-)
-{
-    public static AddProduct Create(Guid cartId, ProductItem productItem)
-    {
-        if (cartId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(cartId));
-
-        return new AddProduct(cartId, productItem);
-    }
-}
+);
 
 public record RemoveProduct(
     Guid CartId,
     PricedProductItem ProductItem
-)
-{
-    public static RemoveProduct Create(Guid cartId, PricedProductItem productItem)
-    {
-        if (cartId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(cartId));
-
-        return new RemoveProduct(cartId, productItem);
-    }
-}
+);
 
 public record ConfirmShoppingCart(
     Guid CartId
-)
-{
-    public static ConfirmShoppingCart Create(Guid cartId)
-    {
-        if (cartId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(cartId));
-
-        return new ConfirmShoppingCart(cartId);
-    }
-}
+);
 
 public record CancelShoppingCart(
     Guid CartId
-)
-{
-    public static CancelShoppingCart Create(Guid cartId)
-    {
-        if (cartId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(cartId));
-
-        return new CancelShoppingCart(cartId);
-    }
-}
+);
 
 // Events
 
 public record ShoppingCartOpened(
     Guid CartId,
     Guid ClientId
-)
-{
-    public static ShoppingCartOpened Create(Guid cartId, Guid clientId)
-    {
-        if (cartId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(cartId));
-        if (clientId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(clientId));
-
-        return new ShoppingCartOpened(cartId, clientId);
-    }
-}
+);
 
 public record ProductAdded(
     Guid CartId,
     PricedProductItem ProductItem
-)
-{
-    public static ProductAdded Create(Guid cartId, PricedProductItem productItem)
-    {
-        if (cartId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(cartId));
-
-        return new ProductAdded(cartId, productItem);
-    }
-}
+);
 
 public record ProductRemoved(
     Guid CartId,
     PricedProductItem ProductItem
-)
-{
-    public static ProductRemoved Create(Guid cartId, PricedProductItem productItem)
-    {
-        if (cartId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(cartId));
-
-        return new ProductRemoved(cartId, productItem);
-    }
-}
+);
 
 public record ShoppingCartConfirmed(
     Guid CartId,
     DateTime ConfirmedAt
-)
-{
-    public static ShoppingCartConfirmed Create(Guid cartId, DateTime confirmedAt)
-    {
-        if (cartId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(cartId));
-        if (confirmedAt == default)
-            throw new ArgumentOutOfRangeException(nameof(confirmedAt));
-
-        return new ShoppingCartConfirmed(cartId, confirmedAt);
-    }
-}
+);
 
 public record ShoppingCartCanceled(
     Guid CartId,
     DateTime CanceledAt
-)
-{
-    public static ShoppingCartCanceled Create(Guid cartId, DateTime canceledAt)
-    {
-        if (cartId == Guid.Empty)
-            throw new ArgumentOutOfRangeException(nameof(cartId));
-        if (canceledAt == default)
-            throw new ArgumentOutOfRangeException(nameof(canceledAt));
-
-        return new ShoppingCartCanceled(cartId, canceledAt);
-    }
-}
+);
 
 
 // Value Objects
@@ -318,25 +220,19 @@ public class ShoppingCart
 
     public decimal TotalPrice => ProductItems.Sum(pi => pi.TotalPrice);
 
-    public static ShoppingCart Open(
+    public static (ShoppingCartOpened, ShoppingCart) Open(
         Guid cartId,
         Guid clientId)
     {
-        return new ShoppingCart(cartId, clientId);
-    }
+        var cart = new ShoppingCart();
 
-    public ShoppingCart(){}
-
-    private ShoppingCart(
-        Guid id,
-        Guid clientId)
-    {
-        var @event = ShoppingCartOpened.Create(
-            id,
+        var @event = new ShoppingCartOpened(
+            cartId,
             clientId
         );
+        cart.Apply(@event);
 
-        Apply(@event);
+        return (@event, cart);
     }
 
     public void Apply(ShoppingCartOpened @event)
@@ -356,7 +252,7 @@ public class ShoppingCart
 
         var pricedProductItem = productPriceCalculator.Calculate(productItem).Single();
 
-        var @event = ProductAdded.Create(Id, pricedProductItem);
+        var @event = new ProductAdded(Id, pricedProductItem);
 
         Apply(@event);
     }
@@ -393,7 +289,7 @@ public class ShoppingCart
         if(!existingProductItem.HasEnough(productItemToBeRemoved.Quantity))
             throw new InvalidOperationException($"Cannot remove {productItemToBeRemoved.Quantity} items of Product with id `{productItemToBeRemoved.ProductId}` as there are only ${existingProductItem.Quantity} items in card");
 
-        var @event = ProductRemoved.Create(Id, productItemToBeRemoved);
+        var @event = new ProductRemoved(Id, productItemToBeRemoved);
 
         Apply(@event);
     }
@@ -427,7 +323,7 @@ public class ShoppingCart
         if (ProductItems.Count == 0)
             throw new InvalidOperationException($"Confirming empty cart is not allowed.");
 
-        var @event = ShoppingCartConfirmed.Create(Id, DateTime.UtcNow);
+        var @event = new ShoppingCartConfirmed(Id, DateTime.UtcNow);
 
         Apply(@event);
     }
@@ -442,7 +338,7 @@ public class ShoppingCart
         if(Status != ShoppingCartStatus.Pending)
             throw new InvalidOperationException($"Canceling cart in '{Status}' status is not allowed.");
 
-        var @event = ShoppingCartCanceled.Create(Id, DateTime.UtcNow);
+        var @event = new ShoppingCartCanceled(Id, DateTime.UtcNow);
 
         Apply(@event);
     }
