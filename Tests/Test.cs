@@ -19,54 +19,44 @@ public record PricedProductItem(Guid ProductId, int Quantity, decimal Price):
 public abstract record ShoppingCartCommand
 {
     public record AddProduct(
-        Guid CartId,
         ProductItem ProductItem,
         Guid? ClientId = null
     ): ShoppingCartCommand;
 
     public record RemoveProduct(
-        Guid CartId,
         PricedProductItem ProductItem
     ): ShoppingCartCommand;
 
     public record Confirm(
-        Guid CartId,
         Guid ClientId
     ): ShoppingCartCommand;
 
-    public record Cancel(
-        Guid CartId
-    ): ShoppingCartCommand;
+    public record Cancel: ShoppingCartCommand;
 }
 
 public abstract record ShoppingCartEvent
 {
     public record Opened(
-        Guid CartId,
         Guid? ClientId,
         DateTimeOffset OpenedAt
     ): ShoppingCartEvent;
 
     public record ProductAdded(
-        Guid CartId,
         PricedProductItem ProductItem,
         DateTimeOffset AddedAt
     ): ShoppingCartEvent;
 
     public record ProductRemoved(
-        Guid CartId,
         PricedProductItem ProductItem,
         DateTimeOffset RemovedAt
     ): ShoppingCartEvent;
 
     public record Confirmed(
-        Guid CartId,
         Guid ClientId,
         DateTimeOffset ConfirmedAt
     ): ShoppingCartEvent;
 
     public record Cancelled(
-        Guid CartId,
         DateTimeOffset CanceledAt
     ): ShoppingCartEvent;
 }
@@ -87,35 +77,35 @@ public class ShoppingClassDecider(
     public ShoppingCartEvent[] Decide(ShoppingCartCommand command, ShoppingCart state) =>
         (state, command) switch
         {
-            (Empty, AddProduct (var cartId, var productItem, var clientId)) =>
+            (Empty, AddProduct (var productItem, var clientId)) =>
             [
-                new Opened(cartId, clientId, Now),
-                new ProductAdded(cartId, priceCalculator.Calculate(productItem).Single(), Now)
+                new Opened(clientId, Now),
+                new ProductAdded(priceCalculator.Calculate(productItem).Single(), Now)
             ],
 
-            (Pending, AddProduct (var cartId, var productItem, _)) =>
+            (Pending, AddProduct (var productItem, _)) =>
             [
-                new ProductAdded(cartId, priceCalculator.Calculate(productItem).Single(), Now)
+                new ProductAdded(priceCalculator.Calculate(productItem).Single(), Now)
             ],
 
-            (Pending pending, RemoveProduct(var cartId, var pricedProductItem)) =>
-                pending.ProductItems
-                    .TryGetValue($"{pricedProductItem.ProductId}{pricedProductItem.Price}", out var quantity)
+            (Pending pending, RemoveProduct(var pricedProductItem)) =>
+                pending.ProductItems.TryGetValue(
+                    $"{pricedProductItem.ProductId}{pricedProductItem.Price}", out var quantity)
                 && quantity >= pricedProductItem.Quantity
                     ?
                     [
-                        new ProductRemoved(cartId, pricedProductItem, Now)
+                        new ProductRemoved(pricedProductItem, Now)
                     ]
                     : throw new InvalidOperationException("Not enough Products!"),
 
-            (Pending, Confirm(var cartId, var clientId)) =>
+            (Pending, Confirm(var clientId)) =>
             [
-                new Confirmed(cartId, clientId, Now)
+                new Confirmed(clientId, Now)
             ],
 
-            (Pending, Cancel(var cartId)) =>
+            (Pending, Cancel) =>
             [
-                new Cancelled(cartId, Now)
+                new Cancelled(Now)
             ],
 
             (Closed, Confirm) => [],
@@ -237,7 +227,7 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
         {
             switch ((current, @event))
             {
-                case (null, Opened(_, var clientId, var openedAt)):
+                case (null, Opened(var clientId, var openedAt)):
                     dbContext.Add(new ShoppingCartModel
                     {
                         Id = id,
@@ -246,18 +236,18 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
                         OpenedAt = openedAt
                     });
                     break;
-                case (not null, Confirmed (_, var clientId, var confirmedAt)):
+                case (not null, Confirmed (var clientId, var confirmedAt)):
                     current.Status = ShoppingCartModel.ShoppingCartStatus.Confirmed;
                     current.ClientId = clientId;
                     current.ConfirmedAt = confirmedAt;
                     dbContext.ShoppingCarts.Update(current);
                     break;
-                case (not null, Cancelled (_, var canceledAt)):
+                case (not null, Cancelled (var canceledAt)):
                     current.Status = ShoppingCartModel.ShoppingCartStatus.Canceled;
                     current.ConfirmedAt = canceledAt;
                     dbContext.ShoppingCarts.Update(current);
                     break;
-                case (not null, ProductAdded(_, var (productId, quantity, price), var addedAt)):
+                case (not null, ProductAdded(var (productId, quantity, price), var addedAt)):
                     var toUpdate = current.ProductItems.SingleOrDefault(p => p.ProductId == productId);
 
                     if (toUpdate == null)
@@ -274,7 +264,7 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
                     }
 
                     break;
-                case (not null, ProductRemoved(_, var (productId, quantity), _)):
+                case (not null, ProductRemoved(var (productId, quantity), _)):
                     var existing = current.ProductItems.Single(p => p.ProductId == productId);
 
                     if (existing.Quantity - quantity == 0)
@@ -320,12 +310,12 @@ public class Test
         var decider = new ShoppingClassDecider(new DummyProductPriceCalculator(price), new FakeTimeProvider(now));
 
         //When
-        var result = decider.Decide(new AddProduct(cardId, productItem), state);
+        var result = decider.Decide(new AddProduct(productItem), state);
 
 
         result.Should().Equal([
-            new Opened(cardId, null, now),
-            new ProductAdded(cardId, new PricedProductItem(productItem.ProductId, productItem.Quantity, price), now)
+            new Opened(null, now),
+            new ProductAdded(new PricedProductItem(productItem.ProductId, productItem.Quantity, price), now)
         ]);
     }
 }
