@@ -8,12 +8,10 @@ namespace Tests;
 using static ShoppingCartCommand;
 using static ShoppingCartEvent;
 using static ShoppingCart;
+
 using ProductItems = ImmutableDictionary<string, int>;
-
-public record ProductItem(Guid ProductId, int Quantity);
-
-public record PricedProductItem(Guid ProductId, int Quantity, decimal Price):
-    ProductItem(ProductId, Quantity);
+using ProductItem = (Guid ProductId, int Quantity);
+using PricedProductItem = (Guid ProductId, int Quantity, decimal Price);
 
 // Commands
 public abstract record ShoppingCartCommand
@@ -88,10 +86,8 @@ public class ShoppingClassDecider(
                 new ProductAdded(priceCalculator.Calculate(productItem).Single(), Now)
             ],
 
-            (Pending pending, RemoveProduct(var pricedProductItem)) =>
-                pending.ProductItems.TryGetValue(
-                    $"{pricedProductItem.ProductId}{pricedProductItem.Price}", out var quantity)
-                && quantity >= pricedProductItem.Quantity
+            (Pending pending, RemoveProduct((var productId, var toRemove, var price) pricedProductItem)) =>
+                pending.ProductItems.TryGetValue($"{productId}{price}", out var quantity) && quantity >= toRemove
                     ?
                     [
                         new ProductRemoved(pricedProductItem, Now)
@@ -259,18 +255,23 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
                     }
                     else
                     {
-                        toUpdate.UpdatedAt = addedAt;
                         toUpdate.Quantity += quantity;
+                        toUpdate.UpdatedAt = addedAt;
                     }
 
                     break;
-                case (not null, ProductRemoved(var (productId, quantity), _)):
+                case (not null, ProductRemoved(var (productId, quantity, price), var removedAt)):
                     var existing = current.ProductItems.Single(p => p.ProductId == productId);
 
                     if (existing.Quantity - quantity == 0)
+                    {
                         current.ProductItems.Remove(existing);
+                    }
                     else
+                    {
                         existing.Quantity -= quantity;
+                        existing.UpdatedAt = removedAt;
+                    }
 
                     break;
                 default:
