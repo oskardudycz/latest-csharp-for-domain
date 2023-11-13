@@ -122,7 +122,7 @@ public class ShoppingClassDecider(
 
             (Closed, Cancel) => [],
 
-            (_, _) => throw new InvalidOperationException(nameof(command))
+            _ => throw new InvalidOperationException(nameof(command))
         };
 
     private DateTimeOffset Now => timeProvider.GetLocalNow();
@@ -143,6 +143,8 @@ public class ShoppingCartModel
         public required Guid ProductId { get; init; }
         public required int Quantity { get; set; }
         public required decimal Price { get; init; }
+        public required DateTimeOffset AddedAt { get; set; }
+        public DateTimeOffset? UpdatedAt { get; set; }
     }
 
     public enum ShoppingCartStatus
@@ -255,18 +257,30 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
                     current.ConfirmedAt = canceledAt;
                     dbContext.ShoppingCarts.Update(current);
                     break;
-                case (not null, ProductAdded(_, var productItem, _)):
-                    current.ProductItems
-                        .Single(p => p.ProductId == productItem.ProductId)
-                        .Quantity += productItem.Quantity;
-                    break;
-                case (not null, ProductRemoved(_, var productItem, _)):
-                    var existing = current!.ProductItems.Single(p => p.ProductId == productItem.ProductId);
+                case (not null, ProductAdded(_, var (productId, quantity, price), var addedAt)):
+                    var toUpdate = current.ProductItems.SingleOrDefault(p => p.ProductId == productId);
 
-                    if (existing.Quantity - productItem.Quantity == 0)
+                    if (toUpdate == null)
+                    {
+                        current.ProductItems.Add(new ShoppingCartModel.PricedProductItem
+                        {
+                            ProductId = productId, Quantity = quantity, Price = price, AddedAt = addedAt,
+                        });
+                    }
+                    else
+                    {
+                        toUpdate.UpdatedAt = addedAt;
+                        toUpdate.Quantity += quantity;
+                    }
+
+                    break;
+                case (not null, ProductRemoved(_, var (productId, quantity), _)):
+                    var existing = current.ProductItems.Single(p => p.ProductId == productId);
+
+                    if (existing.Quantity - quantity == 0)
                         current.ProductItems.Remove(existing);
                     else
-                        existing.Quantity -= productItem.Quantity;
+                        existing.Quantity -= quantity;
 
                     break;
                 default:
