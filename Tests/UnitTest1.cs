@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
+using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Tests;
 
@@ -211,6 +213,10 @@ public class ECommerceDBContext: DbContext
                 a.HasKey("ProductId", "ShoppingCartId");
             });
     }
+
+    protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) =>
+        optionsBuilder
+            .UseInMemoryDatabase("ECommerceTest");
 }
 
 public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCartRepository
@@ -281,7 +287,27 @@ public class DummyProductPriceCalculator(decimal price): IProductPriceCalculator
 public class UnitTest1
 {
     [Fact]
-    public void Test1()
+    public void GivenEmptyShoppingCart_WhenAddProduct_ThenReturnsOpenedAndProductAddedEvents()
     {
+        //Given
+        var price = (decimal)new Random().NextDouble() * 100m;
+        var now = DateTimeOffset.Now;
+
+        var cardId = Guid.NewGuid();
+        var productItem = new ProductItem(Guid.NewGuid(), 10);
+
+        var state = new Empty();
+
+        var decider = new ShoppingClassDecider(new DummyProductPriceCalculator(price), new FakeTimeProvider(now));
+
+        //When
+        var result = decider.Decide(new AddProduct(cardId, productItem), state);
+
+
+        result.Should().Equal([
+            new Opened(cardId, null, now),
+            new ProductAdded(cardId, new PricedProductItem(productItem.ProductId, productItem.Quantity, price), now)
+        ]);
+
     }
 }
