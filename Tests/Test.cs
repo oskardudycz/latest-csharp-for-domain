@@ -31,6 +31,8 @@ public abstract record ShoppingCartCommand
     ): ShoppingCartCommand;
 
     public record Cancel: ShoppingCartCommand;
+
+    private ShoppingCartCommand() { }
 }
 
 public abstract record ShoppingCartEvent
@@ -58,6 +60,8 @@ public abstract record ShoppingCartEvent
     public record Cancelled(
         DateTimeOffset CanceledAt
     ): ShoppingCartEvent;
+
+    private ShoppingCartEvent() { }
 }
 
 public abstract record ShoppingCart
@@ -67,13 +71,16 @@ public abstract record ShoppingCart
     public record Pending(ProductItems ProductItems): ShoppingCart;
 
     public record Closed: ShoppingCart;
+
+    private ShoppingCart() { }
 }
 
 // Primary constructor & TimeProvider
 // Then Collection expressions and advanced pattern matching
 public class ShoppingClassDecider(
     IProductPriceCalculator priceCalculator,
-    TimeProvider timeProvider)
+    TimeProvider timeProvider
+)
 {
     public ShoppingCartEvent[] Decide(ShoppingCartCommand command, ShoppingCart state) =>
         (state, command) switch
@@ -139,8 +146,7 @@ public class ShoppingCartModel
     public enum ShoppingCartStatus
     {
         Pending,
-        Confirmed,
-        Canceled
+        Confirmed
     }
 }
 
@@ -185,7 +191,6 @@ public class ShoppingClassCommandHandler(
                 );
 
             case ShoppingCartModel.ShoppingCartStatus.Confirmed:
-            case ShoppingCartModel.ShoppingCartStatus.Canceled:
                 return new Closed();
 
             default:
@@ -224,9 +229,9 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
     {
         foreach (var @event in events)
         {
-            switch ((current, @event))
+            switch (@event, current)
             {
-                case (null, Opened(var clientId, var openedAt)):
+                case (Opened(var clientId, var openedAt), null):
                     dbContext.Add(new ShoppingCartModel
                     {
                         Id = id,
@@ -235,18 +240,7 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
                         OpenedAt = openedAt
                     });
                     break;
-                case (not null, Confirmed (var clientId, var confirmedAt)):
-                    current.Status = ShoppingCartModel.ShoppingCartStatus.Confirmed;
-                    current.ClientId = clientId;
-                    current.ConfirmedAt = confirmedAt;
-                    dbContext.ShoppingCarts.Update(current);
-                    break;
-                case (not null, Cancelled (var canceledAt)):
-                    current.Status = ShoppingCartModel.ShoppingCartStatus.Canceled;
-                    current.ConfirmedAt = canceledAt;
-                    dbContext.ShoppingCarts.Update(current);
-                    break;
-                case (not null, ProductAdded(var (productId, quantity, price), var addedAt)):
+                case (ProductAdded(var (productId, quantity, price), var addedAt), not null):
                     var toUpdate = current.ProductItems.SingleOrDefault(p => p.ProductId == productId);
 
                     if (toUpdate == null)
@@ -263,7 +257,7 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
                     }
 
                     break;
-                case (not null, ProductRemoved(var (productId, quantity, price), var removedAt)):
+                case (ProductRemoved(var (productId, quantity, price), var removedAt), not null):
                     var existing = current.ProductItems.Single(p => p.ProductId == productId);
 
                     if (existing.Quantity - quantity == 0)
@@ -276,6 +270,15 @@ public class ShoppingCartRepository(ECommerceDBContext dbContext): IShoppingCart
                         existing.UpdatedAt = removedAt;
                     }
 
+                    break;
+                case (Confirmed (var clientId, var confirmedAt), not null):
+                    current.Status = ShoppingCartModel.ShoppingCartStatus.Confirmed;
+                    current.ClientId = clientId;
+                    current.ConfirmedAt = confirmedAt;
+                    dbContext.ShoppingCarts.Update(current);
+                    break;
+                case (Cancelled, not null):
+                    dbContext.ShoppingCarts.Remove(current);
                     break;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(@event));
@@ -315,8 +318,7 @@ public class Test
 
         //When
         var result = decider.Decide(new AddProduct(productItem), state);
-
-
+        
         result.Should().Equal([
             new Opened(null, now),
             new ProductAdded(new PricedProductItem(productItem.ProductId, productItem.Quantity, price), now)
