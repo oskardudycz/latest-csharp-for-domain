@@ -167,7 +167,7 @@ public interface IShoppingCartRepository
 }
 
 public class ShoppingCartCommandHandler(
-    ShoppingClassDecider decider,
+    ShoppingCartDecider decider,
     IShoppingCartRepository repository
 )
 {
@@ -306,19 +306,18 @@ public class Test
     public void GivenEmptyShoppingCart_WhenAddProduct_ThenReturnsOpenedAndProductAddedEvents()
     {
         //Given
-        var price = (decimal)new Random().NextDouble() * 100m;
         var now = DateTimeOffset.Now;
 
-        var cardId = Guid.NewGuid();
+        var price = (decimal)new Random().NextDouble() * 100m;
         var productItem = new ProductItem(Guid.NewGuid(), 10);
 
         var state = new Empty();
 
-        var decider = new ShoppingClassDecider(new DummyProductPriceCalculator(price), new FakeTimeProvider(now));
+        var decider = new ShoppingCartDecider(new DummyProductPriceCalculator(price), new FakeTimeProvider(now));
 
         //When
         var result = decider.Decide(new AddProduct(productItem), state);
-        
+
         result.Should().Equal([
             new Opened(null, now),
             new ProductAdded(new PricedProductItem(productItem.ProductId, productItem.Quantity, price), now)
