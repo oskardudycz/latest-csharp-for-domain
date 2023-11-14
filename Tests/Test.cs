@@ -166,7 +166,7 @@ public interface IShoppingCartRepository
     }
 }
 
-public class ShoppingClassCommandHandler(
+public class ShoppingCartCommandHandler(
     ShoppingClassDecider decider,
     IShoppingCartRepository repository
 )
