@@ -77,7 +77,7 @@ public abstract record ShoppingCart
 
 // Primary constructor & TimeProvider
 // Then Collection expressions and advanced pattern matching
-public class ShoppingClassDecider(
+public class ShoppingCartDecider(
     IProductPriceCalculator priceCalculator,
     TimeProvider timeProvider
 )
