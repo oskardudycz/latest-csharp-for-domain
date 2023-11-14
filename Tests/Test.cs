@@ -9,6 +9,7 @@ using static ShoppingCartCommand;
 using static ShoppingCartEvent;
 using static ShoppingCart;
 
+// Types Aliases
 using ProductItems = ImmutableDictionary<string, int>;
 using ProductItem = (Guid ProductId, int Quantity);
 using PricedProductItem = (Guid ProductId, int Quantity, decimal Price);
@@ -68,6 +69,8 @@ public abstract record ShoppingCart
     public record Closed: ShoppingCart;
 }
 
+// Primary constructor & TimeProvider
+// Then Collection expressions and advanced pattern matching
 public class ShoppingClassDecider(
     IProductPriceCalculator priceCalculator,
     TimeProvider timeProvider)
