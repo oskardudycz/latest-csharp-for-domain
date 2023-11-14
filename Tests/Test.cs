@@ -178,25 +178,20 @@ public class ShoppingCartCommandHandler(
             ct
         );
 
-    private ShoppingCart Map(ShoppingCartModel? model)
-    {
-        if (model == null)
-            return new Empty();
-
-        switch (model.Status)
+    private static ShoppingCart Map(ShoppingCartModel? model) =>
+        model?.Status switch
         {
-            case ShoppingCartModel.ShoppingCartStatus.Pending:
-                return new Pending(
+            null => new Empty(),
+
+            ShoppingCartModel.ShoppingCartStatus.Pending =>
+                new Pending(
                     model.ProductItems.ToImmutableDictionary(ks => $"{ks.ProductId}{ks.Price}", vs => vs.Quantity)
-                );
+                ),
 
-            case ShoppingCartModel.ShoppingCartStatus.Confirmed:
-                return new Closed();
-
-            default:
-                throw new ArgumentOutOfRangeException();
-        }
-    }
+            ShoppingCartModel.ShoppingCartStatus.Confirmed => new Closed(),
+            
+            _ => throw new ArgumentOutOfRangeException()
+        };
 }
 
 public class ECommerceDBContext: DbContext
